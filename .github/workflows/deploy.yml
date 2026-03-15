@@ -1,0 +1,44 @@
+name: Deploy to Kubernetes
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Устанавливаем kubectl по официальной инструкции (Linux)
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      # Настраиваем kubeconfig из секрета
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          cat << 'EOF' > ~/.kube/config
+          ${{ secrets.KUBE_CONFIG }}
+          EOF
+
+      # Сборка образа (можно использовать тот же Dockerfile)
+      - name: Build image for cluster
+        run: |
+          docker build -t lab4-flask:latest .
+
+      # Здесь можно использовать registry в Cloud.ru или kind load; для простоты
+      # предположим, что узлы кластера имеют доступ к этому registry,
+      # но для учебной работы достаточно самого факта "docker build" перед kubectl apply.
+
+      - name: Apply manifests
+        run: |
+          kubectl apply -f k8s/
+          kubectl rollout status deployment/flask-deployment
+          kubectl get pods
+          kubectl get svc
