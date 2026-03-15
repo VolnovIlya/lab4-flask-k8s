@@ -48,3 +48,54 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/lab4-flask:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/lab4-flask:${{ github.sha }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    env:
+      CLOUDRU_KEY_ID: ${{ secrets.CLOUDRU_KEY_ID }}
+      CLOUDRU_SECRET_ID: ${{ secrets.CLOUDRU_SECRET_ID }}
+      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/lab4-flask:${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      - name: Install cloudlogin
+        run: |
+          curl -LO https://github.com/cloud-ru-tech/cloudlogin/releases/download/v1.0.2/cloudlogin_Linux_amd64.tar.gz
+          tar -xzf cloudlogin_Linux_amd64.tar.gz
+          sudo mv cloudlogin /usr/local/bin/
+          cloudlogin help
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          cat << 'EOF' > ~/.kube/config
+          ${{ secrets.KUBE_CONFIG }}
+          EOF
+
+      - name: Test connection
+        run: kubectl get nodes
+
+      # Вариант 1: обновляем образ у уже созданного Deployment
+      - name: Update deployment image
+        run: |
+          kubectl set image deployment/flask-deployment \
+            flask-container=$IMAGE --record
+          kubectl rollout status deployment/flask-deployment
+          kubectl get pods
+
+      # Вариант 2 (если Deployment/Service ещё не создан) — применить манифесты
+      # - name: Apply manifests
+      #   run: |
+      #     kubectl apply -f k8s/
+      #     kubectl rollout status deployment/flask-deployment
+      #     kubectl get pods
+      #     kubectl get svc
