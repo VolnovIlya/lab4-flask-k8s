@@ -42,3 +42,8 @@ jobs:
           kubectl rollout status deployment/flask-deployment
           kubectl get pods
           kubectl get svc
+      
+      - name: Scale deployment
+        run: |
+          kubectl scale deployment/flask-deployment --replicas=3
+          kubectl get pods
